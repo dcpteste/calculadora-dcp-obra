@@ -29,7 +29,7 @@ def gerar_pdf(dados_ensaio):
     pdf.cell(95, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", border=1, ln=True)
     pdf.multi_cell(190, 10, f"Local: {dados_ensaio['endereco']}", border=1)
     
-    # --- NOVA SEÇÃO DE PARÂMETROS ---
+    # --- SEÇÃO DE PARÂMETROS NO PDF ---
     pdf.ln(2)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(190, 8, "PARAMETROS DE REFERENCIA", border="B", ln=True)
@@ -56,22 +56,36 @@ def gerar_pdf(dados_ensaio):
         pdf.cell(60, 10, f"{leitura}", border=1, align='C')
         pdf.cell(70, 10, f"{ipd_parcial:.2f} mm/g", border=1, align='C', ln=True)
     
-    # Resultado Final
+    # Resultado Final no PDF
     pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    # Cor de fundo no resultado (opcional)
     if dados_ensaio['status'] == "APROVADO":
-        pdf.set_text_color(0, 128, 0) # Verde
+        pdf.set_text_color(0, 128, 0)
     else:
-        pdf.set_text_color(255, 0, 0) # Vermelho
+        pdf.set_text_color(255, 0, 0)
         
     pdf.cell(190, 12, f"STATUS FINAL: {dados_ensaio['status']}", border=1, ln=True, align='C')
-    pdf.set_text_color(0, 0, 0) # Volta pra preto
+    pdf.set_text_color(0, 0, 0)
     pdf.cell(190, 12, f"IPD CALCULADO: {dados_ensaio['ipd_final']:.2f} mm/golpe", border=1, ln=True, align='C')
     
     return pdf.output(dest='S').encode('latin-1')
+
+# --- BARRA LATERAL (CONFIGURAÇÕES) ---
+with st.sidebar:
+    st.header("⚙️ Ajustar Limites")
+    st.write("Altere e clique em Salvar.")
+    novo_bgs = st.number_input("Limite BGS", value=st.session_state.limites["BGS"], step=0.1)
+    novo_solo = st.number_input("Limite Solo", value=st.session_state.limites["Solo"], step=0.1)
+    novo_areia = st.number_input("Limite Areia", value=st.session_state.limites["Areia"], step=0.1)
+    
+    if st.button("💾 Salvar Configurações", use_container_width=True):
+        st.session_state.limites["BGS"] = novo_bgs
+        st.session_state.limites["Solo"] = novo_solo
+        st.session_state.limites["Areia"] = novo_areia
+        st.success("Salvo com sucesso!")
+
 # --- INTERFACE PRINCIPAL ---
-st.title("🏗️ Registro DCP ")
+st.title("🏗️ Registro de Ensaio DCP")
 
 # Passo 1
 st.header("1. Identificação")
@@ -87,7 +101,6 @@ with c2:
 with c3:
     if st.button("Areia", use_container_width=True): st.session_state.material = "Areia"
 
-# --- AQUI VOLTOU A LINHA DE INFORMAÇÃO DO MATERIAL ---
 limite_v = st.session_state.limites[st.session_state.material]
 st.info(f"Material Selecionado: **{st.session_state.material}** | Valor Aceitável: **≤ {limite_v} mm/golpe**")
 
@@ -113,7 +126,7 @@ if st.button("➕ Adicionar Batidas", use_container_width=True):
     st.session_state.batidas.append("")
     st.rerun()
 
-# Passo 4 - Resultado
+# Passo 4 - Resultado e Geração de PDF
 leituras_validas = []
 for b in st.session_state.batidas:
     if b.strip() != "":
@@ -134,6 +147,7 @@ if leituras_validas:
     if status == "APROVADO": st.success(f"✅ {status}")
     else: st.error(f"⚠️ {status}")
 
+    # Monta os dados para o PDF
     dados = {
         "os": num_os, 
         "endereco": endereco, 
@@ -146,4 +160,10 @@ if leituras_validas:
     }
     
     pdf_bytes = gerar_pdf(dados)
-    st.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"DCP_OS_{num_os}.pdf", mime="application/pdf", use_container_width=True)
+    st.download_button(
+        label="📥 Baixar Relatório PDF", 
+        data=pdf_bytes, 
+        file_name=f"DCP_OS_{num_os}.pdf", 
+        mime="application/pdf", 
+        use_container_width=True
+    )
