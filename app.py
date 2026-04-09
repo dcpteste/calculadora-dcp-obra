@@ -15,48 +15,63 @@ def gerar_pdf(dados_ensaio):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, "ENSAIO DCP - CONE DE PENETRACAO DINAMICA", ln=True, align='C')
+    
+    # Cabeçalho
+    pdf.cell(200, 10, "RELATORIO DE ENSAIO DCP", ln=True, align='C')
     pdf.set_font("Arial", "", 12)
-    pdf.ln(10)
-    pdf.cell(100, 10, f"OS: {dados_ensaio['os']}", border=1)
-    pdf.cell(90, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", border=1, ln=True)
-    pdf.multi_cell(190, 10, f"Local: {dados_ensaio['endereco']}", border=1)
-    pdf.cell(190, 10, f"Material: {dados_ensaio['material']}", border=1, ln=True)
     pdf.ln(5)
+    
+    # Informações da OS e Local
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(190, 8, "DADOS GERAIS", border="B", ln=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(95, 10, f"OS: {dados_ensaio['os']}", border=1)
+    pdf.cell(95, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", border=1, ln=True)
+    pdf.multi_cell(190, 10, f"Local: {dados_ensaio['endereco']}", border=1)
+    
+    # --- NOVA SEÇÃO DE PARÂMETROS ---
+    pdf.ln(2)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(190, 8, "PARAMETROS DE REFERENCIA", border="B", ln=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(95, 10, f"Material Selecionado: {dados_ensaio['material']}", border=1)
+    pdf.cell(95, 10, f"Limite Aceitavel: <= {dados_ensaio['limite_ref']:.2f} mm/golpe", border=1, ln=True)
+    pdf.ln(5)
+    
+    # Tabela de Batidas
     pdf.set_font("Arial", "B", 10)
     pdf.cell(60, 10, "N. de Golpes", border=1, align='C')
     pdf.cell(60, 10, "Penetracao (mm)", border=1, align='C')
     pdf.cell(70, 10, "IPD Acumulado", border=1, align='C', ln=True)
+    
     pdf.set_font("Arial", "", 10)
     pdf.cell(60, 10, "0", border=1, align='C')
     pdf.cell(60, 10, f"{dados_ensaio['m_zero']}", border=1, align='C')
     pdf.cell(70, 10, "-", border=1, align='C', ln=True)
+    
     for i, leitura in enumerate(dados_ensaio['leituras']):
         golpes = (i+1)*3
         ipd_parcial = (leitura - dados_ensaio['m_zero']) / golpes
         pdf.cell(60, 10, f"{golpes}", border=1, align='C')
         pdf.cell(60, 10, f"{leitura}", border=1, align='C')
         pdf.cell(70, 10, f"{ipd_parcial:.2f} mm/g", border=1, align='C', ln=True)
+    
+    # Resultado Final
     pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(190, 10, f"RESULTADO FINAL: {dados_ensaio['status']}", border=1, ln=True, align='C')
-    pdf.cell(190, 10, f"IPD CALCULADO: {dados_ensaio['ipd_final']:.2f} mm/golpe", border=1, ln=True, align='C')
+    # Cor de fundo no resultado (opcional)
+    if dados_ensaio['status'] == "APROVADO":
+        pdf.set_text_color(0, 128, 0) # Verde
+    else:
+        pdf.set_text_color(255, 0, 0) # Vermelho
+        
+    pdf.cell(190, 12, f"STATUS FINAL: {dados_ensaio['status']}", border=1, ln=True, align='C')
+    pdf.set_text_color(0, 0, 0) # Volta pra preto
+    pdf.cell(190, 12, f"IPD CALCULADO: {dados_ensaio['ipd_final']:.2f} mm/golpe", border=1, ln=True, align='C')
+    
     return pdf.output(dest='S').encode('latin-1')
-
-# --- BARRA LATERAL (CONFIGURAÇÕES) ---
-with st.sidebar:
-    st.header("⚙️ Ajustar Limites")
-    novo_bgs = st.number_input("Limite BGS", value=st.session_state.limites["BGS"], step=0.1)
-    novo_solo = st.number_input("Limite Solo", value=st.session_state.limites["Solo"], step=0.1)
-    novo_areia = st.number_input("Limite Areia", value=st.session_state.limites["Areia"], step=0.1)
-    if st.button("💾 Salvar Configurações", use_container_width=True):
-        st.session_state.limites["BGS"] = novo_bgs
-        st.session_state.limites["Solo"] = novo_solo
-        st.session_state.limites["Areia"] = novo_areia
-        st.success("Salvo!")
-
 # --- INTERFACE PRINCIPAL ---
-st.title("🏗️ Registro DCP - CORSAN")
+st.title("🏗️ Registro DCP ")
 
 # Passo 1
 st.header("1. Identificação")
@@ -120,8 +135,14 @@ if leituras_validas:
     else: st.error(f"⚠️ {status}")
 
     dados = {
-        "os": num_os, "endereco": endereco, "material": st.session_state.material,
-        "m_zero": marco_zero, "leituras": leituras_validas, "ipd_final": ipd, "status": status
+        "os": num_os, 
+        "endereco": endereco, 
+        "material": st.session_state.material,
+        "m_zero": marco_zero, 
+        "leituras": leituras_validas, 
+        "ipd_final": ipd, 
+        "status": status,
+        "limite_ref": limite_v
     }
     
     pdf_bytes = gerar_pdf(dados)
