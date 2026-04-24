@@ -2,7 +2,7 @@ import streamlit as st
 from fpdf import FPDF
 from datetime import datetime
 import pandas as pd
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 import io
 
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
@@ -16,7 +16,6 @@ st.set_page_config(
 # ==================== ESTILOS CSS PERSONALIZADOS ====================
 st.markdown("""
 <style>
-    /* Tema claro (padrão) */
     .main-title {
         font-size: 2.2rem;
         font-weight: 700;
@@ -106,32 +105,33 @@ def calcular_ipd(marco_zero: float, leituras: list) -> dict:
         "ipd_evolucao": ipd_evolucao
     }
 
-def gerar_grafico_evolucao(ipd_evolucao: list, limite: float) -> go.Figure:
-    """Cria gráfico de barras da evolução do IPD."""
+def gerar_grafico_evolucao(ipd_evolucao: list, limite: float):
+    """Cria gráfico de barras da evolução do IPD usando matplotlib."""
     if not ipd_evolucao:
-        return go.Figure()
+        return None
     
     df = pd.DataFrame(ipd_evolucao)
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=df["golpes"],
-        y=df["ipd"],
-        name="IPD parcial",
-        marker_color='#0F4C81',
-        text=df["ipd"].round(2),
-        textposition='outside'
-    ))
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.bar(df["golpes"], df["ipd"], color='#0F4C81', alpha=0.7, edgecolor='black')
+    
+    # Adicionar valores nas barras
+    for bar, ipd_val in zip(bars, df["ipd"]):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{ipd_val:.2f}', ha='center', va='bottom', fontsize=9)
+    
     # Linha do limite
-    fig.add_hline(y=limite, line_dash="dash", line_color="red", 
-                  annotation_text=f"Limite máximo: {limite:.2f} mm/golpe")
-    fig.update_layout(
-        title="Evolução do Índice de Penetração Dinâmico (IPD)",
-        xaxis_title="Número de golpes acumulados",
-        yaxis_title="IPD (mm/golpe)",
-        template="plotly_white",
-        height=400,
-        hovermode="x unified"
-    )
+    ax.axhline(y=limite, color='red', linestyle='--', linewidth=2, label=f'Limite máximo: {limite:.2f} mm/golpe')
+    
+    ax.set_xlabel('Número de golpes acumulados', fontsize=12)
+    ax.set_ylabel('IPD (mm/golpe)', fontsize=12)
+    ax.set_title('Evolução do Índice de Penetração Dinâmico (IPD)', fontsize=14, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)
+    
+    plt.tight_layout()
     return fig
 
 def gerar_csv(leituras: list, marco_zero: float, ipd_evolucao: list) -> bytes:
@@ -228,16 +228,11 @@ if 'material' not in st.session_state:
     st.session_state.material = "BGS"
 if 'limites' not in st.session_state:
     st.session_state.limites = {"BGS": 6.0, "Solo": 17.0, "Areia": 22.0}
-if 'tema_escuro' not in st.session_state:
-    st.session_state.tema_escuro = False
 
 # ==================== BARRA LATERAL ====================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2286/2286093.png", width=50)
     st.markdown("## ⚙️ Configurações")
-    
-    # Toggle tema escuro (simula com CSS, mas Streamlit nativo não tem; é só estético)
-    st.checkbox("🌙 Modo escuro (experimental)", key="tema_escuro")
     
     st.markdown("### Limites de IPD por material")
     novo_bgs = st.number_input("🟤 BGS (mm/golpe)", value=st.session_state.limites["BGS"], step=0.1, format="%.2f")
@@ -260,7 +255,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 📘 Sobre o ensaio")
-    st.caption("O Índice de Penetração Dinâmico (IPD) mede a resistência do solo. Valores baixos indicam maior compactação. Limite varia conforme material.")
+    st.caption("O Índice de Penetração Dinâmico (IPD) mede a resistência do solo. Valores baixos indicam maior compactação.")
     st.caption("**Cálculo:** IPD = (penetração final - inicial) / número total de golpes.")
 
 # ==================== INTERFACE PRINCIPAL ====================
@@ -333,7 +328,6 @@ for idx, leitura in enumerate(st.session_state.leituras):
 col_add, col_clear, col_export = st.columns(3)
 with col_add:
     if st.button("➕ Adicionar leitura (3 golpes)", use_container_width=True):
-        # Nova leitura inicia com o último valor ou marco zero
         ultimo = st.session_state.leituras[-1] if st.session_state.leituras else marco_zero
         st.session_state.leituras.append(ultimo)
         st.rerun()
@@ -343,8 +337,8 @@ with col_clear:
         st.rerun()
 with col_export:
     if st.session_state.leituras:
-        csv_data = gerar_csv(st.session_state.leituras, marco_zero, 
-                             calcular_ipd(marco_zero, st.session_state.leituras)["ipd_evolucao"])
+        calculo_temp = calcular_ipd(marco_zero, st.session_state.leituras)
+        csv_data = gerar_csv(st.session_state.leituras, marco_zero, calculo_temp["ipd_evolucao"])
         st.download_button(
             label="📎 Exportar CSV",
             data=csv_data,
@@ -385,10 +379,12 @@ if st.session_state.leituras:
     else:
         st.markdown(f'<div class="status-reject">⚠️ STATUS: {status} - O IPD excede o limite máximo de {limite_atual:.2f} mm/golpe. Recomenda-se nova compactação e reensaio.</div>', unsafe_allow_html=True)
     
-    # Gráfico de evolução
+    # Gráfico de evolução (matplotlib)
     st.markdown("### 📉 Evolução do IPD")
     fig = gerar_grafico_evolucao(calculo["ipd_evolucao"], limite_atual)
-    st.plotly_chart(fig, use_container_width=True)
+    if fig:
+        st.pyplot(fig)
+        plt.close(fig)  # Fechar figura para liberar memória
     
     # Tabela detalhada
     with st.expander("📋 Ver tabela detalhada de leituras"):
@@ -425,6 +421,6 @@ if st.session_state.leituras:
 else:
     st.info("👆 Adicione pelo menos uma leitura de penetração para calcular o IPD e visualizar o gráfico.")
 
-# Rodapé da página
+# Rodapé
 st.markdown("---")
 st.caption("Ensaio de Cone Dinâmico (DCP) - Cálculo do IPD conforme normas. Em caso de dúvidas, consulte a supervisão técnica.")
