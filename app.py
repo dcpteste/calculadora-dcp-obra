@@ -257,10 +257,7 @@ with col_add:
     if st.button("➕ Adicionar leitura (3 golpes)", use_container_width=True):
         st.session_state.leituras.append(0.0)
         st.rerun()
-with col_clear:
-    if st.button("🧹 Limpar todas", use_container_width=True):
-        st.session_state.leituras.clear()
-        st.rerun()
+
 
 # --- 5. RESULTADO E CÁLCULOS ---
 if st.session_state.leituras:
